@@ -62,6 +62,7 @@ jobs:
           BASE_ID_TMDT: ${{ vars.BASE_ID_TMDT }}
           TABLE_ORDERS_NAME: ${{ inputs.TABLE_ORDERS_NAME || vars.TABLE_ORDERS_NAME }}
           TABLE_ORDER_ITEMS_NAME: ${{ inputs.TABLE_ORDER_ITEMS_NAME || vars.TABLE_ORDER_ITEMS_NAME }}
+          TABLE_SKUS: ${{ vars.TABLE_SKUS }}
           FROM: ${{ inputs.FROM || vars.FROM }}
           TO: ${{ inputs.TO || vars.TO }}
 

@@ -1,130 +1,106 @@
-# Sync Data TikTok K
+# TikTok Shop to LarkBase Sync
 
-Project Node.js dùng để đồng bộ dữ liệu TikTok Shop của shop K/Han sang LarkBase.
+Project Node.js đồng bộ dữ liệu từ TikTok Shop và hệ thống quản lý sản phẩm sang LarkBase.
 
-## Chức năng chính
+## Chức Năng
 
 ```json
 {
   "sync_orders": {
     "entry": "sync-orders-k.js",
-    "source": ["TikTok Shop Orders API", "KiotViet Products API"],
-    "target": ["LarkBase bảng Orders", "LarkBase bảng Order Items", "LarkBase bảng SKUS"],
-    "description": "Lấy đơn hàng TikTok theo khoảng ngày, format dữ liệu đơn, item và SKU; lấy giá vốn theo SKU từ KiotViet rồi upsert vào LarkBase."
+    "target": ["Orders", "Order Items", "SKUS"],
+    "description": "Đồng bộ đơn hàng, chi tiết sản phẩm trong đơn và danh mục SKU."
   },
   "sync_finance": {
     "entry": "sync-finance-k.js",
-    "source": "TikTok Shop Finance Statement API",
-    "target": "LarkBase bảng Finance",
-    "description": "Lấy statement và transaction tài chính theo khoảng ngày, format các khoản doanh thu/phí/thuế/hoàn tiền rồi upsert vào LarkBase."
+    "target": ["Finance"],
+    "description": "Đồng bộ statement và transaction tài chính."
   },
   "sync_return_refund": {
     "entry": "sync-return-refun.js",
-    "source": "TikTok Shop Return Refund API",
-    "target": "LarkBase bảng Return Refund",
-    "description": "Lấy danh sách yêu cầu trả hàng/hoàn tiền theo khoảng ngày, format thông tin refund, phí ship, lý do trả hàng rồi upsert vào LarkBase."
+    "target": ["Return Refund"],
+    "description": "Đồng bộ yêu cầu trả hàng và hoàn tiền."
   },
   "re_auth_token": {
     "entry": "re-auth-token-tiktok.js",
-    "source": "TikTok auth_code",
-    "target": "Supabase envCloud",
-    "description": "Đổi auth_code lấy access_token/refresh_token mới và lưu token đã mã hoá vào Supabase."
+    "description": "Cập nhật token uỷ quyền TikTok cho shop được chọn."
   }
 }
 ```
 
-## Luồng xử lý
+## Luồng Xử Lý
 
-1. Đọc cấu hình từ `.env`.
-2. Refresh TikTok access token từ token đang lưu ở Supabase.
-3. Lấy danh sách shop đã uỷ quyền từ TikTok Shop.
-4. Gọi API TikTok theo từng shop và phân trang đến hết dữ liệu.
-5. Chuẩn hoá dữ liệu qua các formatter trong `src/utils/tiktok`.
-6. Tạo `id` định danh và `hash` để so sánh dữ liệu mới/cũ.
-7. Tìm hoặc tạo bảng LarkBase theo field map.
-8. Lấy record hiện có trong khoảng ngày cần sync.
-9. Chỉ tạo mới/cập nhật record có thay đổi.
+1. Đọc cấu hình từ biến môi trường.
+2. Lấy token truy cập hợp lệ cho TikTok Shop.
+3. Lấy dữ liệu theo từng shop được uỷ quyền và phân trang đến hết.
+4. Chuẩn hoá dữ liệu bằng formatter tương ứng.
+5. So sánh định danh và hash để chỉ tạo mới/cập nhật record thay đổi.
+6. Ghi dữ liệu vào các bảng LarkBase.
 
-## Entrypoint
+## Shop Mẫu
 
 ```json
 {
-  "orders": "node sync-orders-k.js",
-  "finance": "node sync-finance-k.js",
-  "return_refund": "node sync-return-refun.js",
-  "re_auth": "node re-auth-token-tiktok.js"
+  "CHOICE=1": "SHOP_A",
+  "CHOICE=2": "SHOP_B"
 }
 ```
 
-## Biến môi trường
+## Biến Môi Trường
+
+Tên biến dưới đây là mẫu public-safe. Khi triển khai, ánh xạ chúng sang secret/config tương ứng của môi trường chạy.
 
 ```json
 {
-  "common": [
+  "credentials": [
+    "TIKTOK_APP_KEY",
+    "TIKTOK_APP_SECRET",
+    "LARK_APP_ID",
+    "LARK_APP_SECRET",
+    "KIOT_CLIENT_ID",
+    "KIOT_CLIENT_SECRET",
     "DATABASE_SERVICE_KEY",
-    "AES_256_CBC_APP_SECRET_KEY",
-    "BASE_ID_TMDT",
+    "AES_SECRET_KEY"
+  ],
+  "sync_config": [
+    "BASE_ID",
+    "TABLE_ORDERS_NAME",
+    "TABLE_ORDER_ITEMS_NAME",
+    "TABLE_SKUS",
+    "TABLE_FINANCE_NAME",
+    "TABLE_RETURN_REFUND_NAME",
     "FROM",
     "TO"
   ],
-  "tiktok_han_shop": [
-    "TIKTOK_PARTNER_APP_KEY_7561567100864644872",
-    "TIKTOK_PARTNER_APP_SECRET_7561567100864644872"
-  ],
-  "tiktok_k_shop_reauth": [
-    "TIKTOK_PARTNER_APP_KEY_7527154834987157254",
-    "TIKTOK_PARTNER_APP_SECRET_7527154834987157254"
-  ],
-  "lark": [
-    "LARK_TIKTOK_K_ORDER_ITEMS_APP_ID",
-    "LARK_TIKTOK_K_ORDER_ITEMS_APP_SECRET"
-  ],
-  "kiotviet": [
-    "KIOTVIET_RETAILER",
-    "KIOT_CLIENT_ID",
-    "KIOT_SECRET",
-    "KIOTVIET_RETAILER_OLD",
-    "KIOT_CLIENT_ID_OLD",
-    "KIOT_SECRET_OLD"
-  ],
-  "orders_only": [
-    "TABLE_ORDERS_NAME",
-    "TABLE_ORDER_ITEMS_NAME",
-    "TABLE_SKUS"
-  ],
-  "finance_or_return_refund": [
-    "TABLE_NAME"
-  ],
-  "reauth_only": [
+  "reauth_config": [
     "AUTH_CODE",
     "CHOICE"
   ]
 }
 ```
 
-`FROM` và `TO` dùng format `YYYY/MM/DD`. Script tự thêm giờ:
+`FROM` và `TO` dùng format `YYYY/MM/DD`:
 
 ```json
 {
-  "FROM": "YYYY/MM/DD 00:00:00",
-  "TO": "YYYY/MM/DD 23:59:59",
-  "timezone": "Asia/Bangkok / Vietnam time"
+  "FROM": "YYYY/MM/DD",
+  "TO": "YYYY/MM/DD"
 }
 ```
 
-## Chạy local
+## Chạy Local
 
-```bash
+Cài dependency:
+
+```powershell
 npm install
 ```
 
-Đồng bộ đơn hàng:
+Tạo file `.env` local hoặc thiết lập biến môi trường cần thiết bằng tên secret/config của hệ thống triển khai.
 
-```bash
-$env:BASE_ID_TMDT="..."
-$env:TABLE_ORDERS_NAME="Orders"
-$env:TABLE_ORDER_ITEMS_NAME="Order Items"
-$env:TABLE_SKUS="SKUS"
+Đồng bộ đơn hàng, order items và SKUS:
+
+```powershell
 $env:FROM="2026/05/01"
 $env:TO="2026/05/23"
 node sync-orders-k.js
@@ -132,85 +108,50 @@ node sync-orders-k.js
 
 Đồng bộ tài chính:
 
-```bash
-$env:BASE_ID_TMDT="..."
-$env:TABLE_NAME="Finance"
+```powershell
 $env:FROM="2026/05/01"
 $env:TO="2026/05/23"
 node sync-finance-k.js
 ```
 
-Đồng bộ hoàn trả:
+Đồng bộ trả hàng/hoàn tiền:
 
-```bash
-$env:BASE_ID_TMDT="..."
-$env:TABLE_NAME="Return Refund"
+```powershell
 $env:FROM="2026/05/01"
 $env:TO="2026/05/23"
 node sync-return-refun.js
 ```
 
-Re-auth TikTok token:
+Re-auth token:
 
-```bash
+```powershell
 $env:AUTH_CODE="..."
-$env:CHOICE="2"
+$env:CHOICE="1"
 node re-auth-token-tiktok.js
 ```
 
-```json
-{
-  "CHOICE=1": "Shop K Lady Care",
-  "CHOICE=2": "Shop Han Korea"
-}
-```
+## Tự Động Hoá
 
-## GitHub Actions
+Project có thể chạy bằng GitHub Actions theo lịch hoặc chạy thủ công qua `workflow_dispatch`. Secrets và environments cần được cấu hình trực tiếp trong repository/deployment, không lưu trong source code.
+
+## Cấu Trúc Thư Mục
 
 ```json
 {
-  "sync_orders": {
-    "workflow": ".github/workflows/sync-orders-tiktok-k.yml",
-    "schedule": "*/20 * * * *",
-    "environment": "sync-order"
-  },
-  "sync_finance": {
-    "workflow": ".github/workflows/sync-finance-titkok-k.yml",
-    "schedule": "*/20 * * * *",
-    "environment": "sync-finance"
-  },
-  "sync_return_refund": {
-    "workflow": ".github/workflows/sync-return-refun.yml",
-    "schedule": "*/20 * * * *",
-    "environment": "sync-return-refun"
-  },
-  "re_auth_token": {
-    "workflow": ".github/workflows/re-auth-token-tiktok.yml",
-    "trigger": "workflow_dispatch",
-    "environment": "sync-data-tiktok-k"
-  }
+  "src/config": "Cấu hình endpoint và biến môi trường",
+  "src/core": "API client",
+  "src/services/tiktok": "Dịch vụ lấy dữ liệu TikTok và token",
+  "src/services/larkbase": "Dịch vụ đồng bộ LarkBase",
+  "src/services/kiot": "Dịch vụ lấy thông tin sản phẩm/giá vốn",
+  "src/utils/tiktok": "Formatter và helper TikTok",
+  "src/utils/larkbase": "Field map và helper LarkBase",
+  "src/utils/common": "Helper dùng chung"
 }
 ```
 
-## Cấu trúc thư mục
+## Ghi Chú Vận Hành
 
-```json
-{
-  "src/config": "URL API, path API, biến môi trường",
-  "src/core": "client gọi TikTok, LarkBase, KiotViet, Supabase",
-  "src/services/tiktok": "service lấy orders, statements, returns, token",
-  "src/services/larkbase": "service tạo bảng, tìm record, tạo/cập nhật record",
-  "src/services/kiot": "service lấy access token và danh sách sản phẩm KiotViet",
-  "src/utils/tiktok": "format dữ liệu TikTok và tạo chữ ký API",
-  "src/utils/larkbase": "field map và helper build field LarkBase",
-  "src/utils/common": "helper ngày giờ, hash, retry, diff, file"
-}
-```
-
-## Ghi chú vận hành
-
-- Đồng bộ LarkBase dùng `id` làm khóa định danh và `hash` để phát hiện record thay đổi.
-- Bảng LarkBase chưa tồn tại sẽ được tạo tự động theo field map tương ứng.
-- `sync-orders-k.js` có ghi file debug JSON vào `src/data`.
-- Khi update order items, các field `Giá vốn` và `Mã sản phẩm` không bị ghi đè nếu LarkBase đã có dữ liệu cũ.
-- Workflow đang chạy định kỳ mỗi 20 phút và cũng hỗ trợ chạy tay bằng `workflow_dispatch`.
+- Dữ liệu được đồng bộ theo cơ chế định danh/hash để giảm cập nhật không cần thiết.
+- Dữ liệu SKU được deduplicate trước khi đồng bộ.
+- Khi update order items, dữ liệu được quản lý thủ công trên LarkBase được bảo toàn theo cấu hình hiện tại.
+- Không commit file `.env`, token, secret hoặc file debug chứa dữ liệu thực tế.
