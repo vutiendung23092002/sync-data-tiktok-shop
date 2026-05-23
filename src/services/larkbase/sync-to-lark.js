@@ -1,158 +1,104 @@
-// import * as larkbaseService from "./index.js";
-// import * as utils from "../../utils/index.js";
-
-// /**
-//  * Đồng bộ dữ liệu vào LarkBase có filter theo khoảng ngày
-//  */
-// export async function syncDataToLarkBaseFilterDate(
-//   client,
-//   baseId,
-//   {
-//     tableName,
-//     selectFn,
-//     records = null,
-//     fieldMap,
-//     typeMap,
-//     uiType,
-//     currencyCode = "VND",
-//     idLabel = "ID định danh (TTS)",
-//     excludeUpdateField = null,
-//   },
-//   filterFieldName,
-//   startDate,
-//   endDate
-// ) {
-//   console.log(`=== Đồng bộ dữ liệu lên LarkBase: ${tableName} ===`);
-
-//   // Lấy dữ liệu nguồn
-//   const sourceRecords = records
-//     ? records
-//     : await selectFn?.(startDate, endDate);
-
-//   const data = sourceRecords || [];
-//   console.log(`Tổng số bản ghi cần đồng bộ: ${data.length}`);
-
-//   if (!data.length) {
-//     console.warn("Không có dữ liệu để đồng bộ!");
-//     return;
-//   }
-
-//   // Data cho diff
-//   const newDataForDiff = data.map((r) => ({
-//     id: String(r.id),
-//     hash: r.hash,
-//   }));
-
-//   // Kiểm tra bảng
-//   const listTb = await larkbaseService.getListTable(client, baseId);
-//   const table = listTb?.data?.items?.find((t) => t.name === tableName);
-//   let tableId;
-
-//   if (table) {
-//     console.log(`[LARK] Bảng '${tableName}' đã tồn tại.`);
-//     tableId = table.table_id;
-//   } else {
-//     console.log(`[LARK] Tạo bảng '${tableName}' mới...`);
-
-//     const fields = Object.entries(fieldMap).map(([key, label]) =>
-//       utils.buildField(key, label, typeMap[key], uiType[key], currencyCode)
-//     );
-
-//     tableId = await larkbaseService.ensureLarkBaseTable(
-//       client, baseId, tableName, fields
-//     );
-//   }
-//   console.log("TABLE_ID:", tableId);
-
-//   // Lấy dữ liệu hiện có từ range filter
-//   const existingRecords = await larkbaseService.searchLarkRecordsFilterDate(
-//     client,
-//     baseId,
-//     tableId,
-//     1000,
-//     filterFieldName,
-//     startDate,
-//     endDate
-//   );
-
-//   console.log(
-//     `[LARK] Đã lấy ${existingRecords.length} bản ghi hiện có từ LarkBase.`
-//   );
-
-//   const simplifiedRecords = utils
-//     .extractLarkIdHash(existingRecords, idLabel)
-//     .map((r) => ({
-//       ...r,
-//       id: String(r.id),
-//     }));
-
-//   const { toUpsert } = utils.diffRecords(
-//     newDataForDiff,
-//     simplifiedRecords,
-//     "id",
-//     "hash",
-//     tableName
-//   );
-
-//   const larkIdMap = Object.fromEntries(
-//     simplifiedRecords.map((r) => [String(r.id), r.record_id])
-//   );
-
-//   // Tạo mới
-//   const toCreate = data
-//     .filter(
-//       (r) =>
-//         toUpsert.some((u) => String(u.id) === String(r.id)) &&
-//         !larkIdMap[String(r.id)]
-//     )
-//     .map((r) => utils.mapFieldsToLark(r, fieldMap, typeMap));
-
-//   // Cập nhật (có chặn field)
-//   const toUpdate = data
-//     .filter(
-//       (r) =>
-//         toUpsert.some((u) => String(u.id) === String(r.id)) &&
-//         larkIdMap[String(r.id)]
-//     )
-//     .map((r) => {
-//       const mapped = utils.mapFieldsToLark(r, fieldMap, typeMap).fields;
-
-//       //  BLOCK FIELD ĐƯỢC KHAI BÁO TẠI OPTIONS
-//       if (excludeUpdateField && mapped[excludeUpdateField] !== undefined) {
-//         delete mapped[excludeUpdateField];
-//       }
-
-//       return {
-//         record_id: larkIdMap[String(r.id)],
-//         fields: mapped,
-//       };
-//     });
-
-//   console.log(
-//     `[LARK] Tạo mới: ${toCreate.length} | Cập nhật: ${toUpdate.length}`
-//   );
-
-//   // Push lên Lark
-//   await Promise.all([
-//     toCreate.length
-//       ? larkbaseService.createLarkRecords(client, baseId, tableId, toCreate)
-//       : Promise.resolve(),
-
-//     toUpdate.length
-//       ? larkbaseService.updateLarkRecords(client, baseId, tableId, toUpdate)
-//       : Promise.resolve(),
-//   ]);
-
-//   console.log(`[LARK] Hoàn tất đồng bộ '${tableName}'`);
-// }
-
-
 import * as larkbaseService from "./index.js";
 import * as utils from "../../utils/index.js";
 
-/**
- * Đồng bộ dữ liệu vào LarkBase có filter theo khoảng ngày
- */
+function buildFields(fieldMap, typeMap, uiType, currencyCode) {
+  return Object.entries(fieldMap).map(([key, label]) =>
+    utils.buildField(key, label, typeMap[key], uiType[key], currencyCode),
+  );
+}
+
+async function getOrCreateTableId(
+  client,
+  baseId,
+  tableName,
+  fieldMap,
+  typeMap,
+  uiType,
+  currencyCode,
+) {
+  const listTb = await larkbaseService.getListTable(client, baseId);
+  const table = listTb.find((item) => item.name === tableName);
+
+  if (table) {
+    console.log(`[LARK] Bảng '${tableName}' đã tồn tại.`);
+    return table.table_id;
+  }
+
+  console.log(`[LARK] Tạo bảng '${tableName}' mới...`);
+
+  const fields = buildFields(fieldMap, typeMap, uiType, currencyCode);
+  return larkbaseService.ensureLarkBaseTable(
+    client,
+    baseId,
+    tableName,
+    fields,
+  );
+}
+
+function hasValue(value) {
+  return (
+    value !== undefined &&
+    value !== null &&
+    value !== "" &&
+    !(Array.isArray(value) && value.length === 0)
+  );
+}
+
+function buildCreateRecords(data, toUpsertIds, larkIdMap, fieldMap, typeMap) {
+  return data
+    .filter(
+      (record) =>
+        toUpsertIds.has(String(record.id)) && !larkIdMap[String(record.id)],
+    )
+    .map((record) => utils.mapFieldsToLark(record, fieldMap, typeMap));
+}
+
+function buildUpdateRecords({
+  data,
+  toUpsertIds,
+  larkIdMap,
+  existingRecords,
+  fieldMap,
+  typeMap,
+  excludeUpdateField,
+}) {
+  const excludeList = Array.isArray(excludeUpdateField)
+    ? excludeUpdateField
+    : excludeUpdateField
+      ? [excludeUpdateField]
+      : [];
+
+  return data
+    .filter(
+      (record) =>
+        toUpsertIds.has(String(record.id)) && larkIdMap[String(record.id)],
+    )
+    .map((record) => {
+      const recordId = larkIdMap[String(record.id)];
+      const fields = utils.mapFieldsToLark(record, fieldMap, typeMap).fields;
+
+      if (excludeList.length > 0) {
+        const oldRecordFull = existingRecords.find(
+          (oldRecord) => oldRecord.record_id === recordId,
+        );
+
+        // Field đã có dữ liệu thủ công trên Lark thì không ghi đè.
+        for (const fieldLabel of excludeList) {
+          const oldValue = oldRecordFull?.fields?.[fieldLabel];
+
+          if (hasValue(oldValue) && fields[fieldLabel] !== undefined) {
+            delete fields[fieldLabel];
+          }
+        }
+      }
+
+      return {
+        record_id: recordId,
+        fields,
+      };
+    });
+}
+
 export async function syncDataToLarkBaseFilterDate(
   client,
   baseId,
@@ -165,19 +111,15 @@ export async function syncDataToLarkBaseFilterDate(
     uiType,
     currencyCode = "VND",
     idLabel = "ID định danh (TTS)",
-    excludeUpdateField = null, // string hoặc array
+    excludeUpdateField = null,
   },
   filterFieldName,
   startDate,
-  endDate
+  endDate,
 ) {
   console.log(`=== Đồng bộ dữ liệu lên LarkBase: ${tableName} ===`);
 
-  // Lấy dữ liệu nguồn
-  const sourceRecords = records
-    ? records
-    : await selectFn?.(startDate, endDate);
-
+  const sourceRecords = records ? records : await selectFn?.(startDate, endDate);
   const data = sourceRecords || [];
   console.log(`Tổng số bản ghi cần đồng bộ: ${data.length}`);
 
@@ -186,37 +128,23 @@ export async function syncDataToLarkBaseFilterDate(
     return;
   }
 
-  // Data cho diff
-  const newDataForDiff = data.map((r) => ({
-    id: String(r.id),
-    hash: r.hash,
+  const newDataForDiff = data.map((record) => ({
+    id: String(record.id),
+    hash: record.hash,
   }));
 
-  // Kiểm tra bảng
-  const listTb = await larkbaseService.getListTable(client, baseId);
-  const table = listTb.find((t) => t.name === tableName);
-  let tableId;
+  const tableId = await getOrCreateTableId(
+    client,
+    baseId,
+    tableName,
+    fieldMap,
+    typeMap,
+    uiType,
+    currencyCode,
+  );
 
-  if (table) {
-    console.log(`[LARK] Bảng '${tableName}' đã tồn tại.`);
-    tableId = table.table_id;
-  } else {
-    console.log(`[LARK] Tạo bảng '${tableName}' mới...`);
-
-    const fields = Object.entries(fieldMap).map(([key, label]) =>
-      utils.buildField(key, label, typeMap[key], uiType[key], currencyCode)
-    );
-
-    tableId = await larkbaseService.ensureLarkBaseTable(
-      client,
-      baseId,
-      tableName,
-      fields
-    );
-  }
   console.log("TABLE_ID:", tableId);
 
-  // Lấy dữ liệu hiện có từ range filter
   const existingRecords = await larkbaseService.searchLarkRecordsFilterDate(
     client,
     baseId,
@@ -224,18 +152,18 @@ export async function syncDataToLarkBaseFilterDate(
     1000,
     filterFieldName,
     startDate,
-    endDate
+    endDate,
   );
 
   console.log(
-    `[LARK] Đã lấy ${existingRecords.length} bản ghi hiện có từ LarkBase.`
+    `[LARK] Đã lấy ${existingRecords.length} bản ghi hiện có từ LarkBase.`,
   );
 
   const simplifiedRecords = utils
     .extractLarkIdHash(existingRecords, idLabel)
-    .map((r) => ({
-      ...r,
-      id: String(r.id),
+    .map((record) => ({
+      ...record,
+      id: String(record.id),
     }));
 
   const { toUpsert } = utils.diffRecords(
@@ -243,77 +171,40 @@ export async function syncDataToLarkBaseFilterDate(
     simplifiedRecords,
     "id",
     "hash",
-    tableName
+    tableName,
   );
 
+  const toUpsertIds = new Set(toUpsert.map((record) => String(record.id)));
   const larkIdMap = Object.fromEntries(
-    simplifiedRecords.map((r) => [String(r.id), r.record_id])
+    simplifiedRecords.map((record) => [String(record.id), record.record_id]),
   );
 
-  // Tạo mới
-  const toCreate = data
-    .filter(
-      (r) =>
-        toUpsert.some((u) => String(u.id) === String(r.id)) &&
-        !larkIdMap[String(r.id)]
-    )
-    .map((r) => utils.mapFieldsToLark(r, fieldMap, typeMap));
+  const toCreate = buildCreateRecords(
+    data,
+    toUpsertIds,
+    larkIdMap,
+    fieldMap,
+    typeMap,
+  );
 
-  // ===========================
-  // UPDATE — có exclude field
-  // ===========================
-  const toUpdate = data
-    .filter(
-      (r) =>
-        toUpsert.some((u) => String(u.id) === String(r.id)) &&
-        larkIdMap[String(r.id)]
-    )
-    .map((r) => {
-      const mapped = utils.mapFieldsToLark(r, fieldMap, typeMap).fields;
-
-      const excludeList = Array.isArray(excludeUpdateField)
-        ? excludeUpdateField
-        : excludeUpdateField
-        ? [excludeUpdateField]
-        : [];
-
-      if (excludeList.length > 0) {
-        const oldRecordFull = existingRecords.find(
-          (rec) => rec.record_id === larkIdMap[String(r.id)]
-        );
-
-        excludeList.forEach((fldLabel) => {
-          const oldVal = oldRecordFull?.fields?.[fldLabel];
-
-          const hasOldValue =
-            oldVal !== undefined &&
-            oldVal !== null &&
-            oldVal !== "" &&
-            !(Array.isArray(oldVal) && oldVal.length === 0);
-
-          // Nếu có dữ liệu cũ → không update field này
-          if (hasOldValue && mapped[fldLabel] !== undefined) {
-            delete mapped[fldLabel];
-          }
-        });
-      }
-
-      return {
-        record_id: larkIdMap[String(r.id)],
-        fields: mapped,
-      };
-    });
+  const toUpdate = buildUpdateRecords({
+    data,
+    toUpsertIds,
+    larkIdMap,
+    existingRecords,
+    fieldMap,
+    typeMap,
+    excludeUpdateField,
+  });
 
   console.log(
-    `[LARK] Tạo mới: ${toCreate.length} | Cập nhật: ${toUpdate.length}`
+    `[LARK] Tạo mới: ${toCreate.length} | Cập nhật: ${toUpdate.length}`,
   );
 
-  // Push lên Lark
   await Promise.all([
     toCreate.length
       ? larkbaseService.createLarkRecords(client, baseId, tableId, toCreate)
       : Promise.resolve(),
-
     toUpdate.length
       ? larkbaseService.updateLarkRecords(client, baseId, tableId, toUpdate)
       : Promise.resolve(),

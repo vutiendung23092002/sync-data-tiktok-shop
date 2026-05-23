@@ -3,35 +3,45 @@ import { getAccessTokenEnvCloud } from "./get-access-token.js";
 import { fetchAllProducts } from "./fetch-all-products.js";
 import * as utils from "../../utils/index.js";
 
-export async function getAllCostMap() {
-  async function fetchCostMap(client_id, client_secret, retailer) {
-    const accessToken = await utils.callWithRetry(() =>
-      getAccessTokenEnvCloud(client_id, client_secret),
-    );
+async function fetchCostMap(clientId, clientSecret, retailer) {
+  const accessToken = await utils.callWithRetry(() =>
+    getAccessTokenEnvCloud(clientId, clientSecret),
+  );
 
-    const products = await utils.callWithRetry(
-      () =>
-        fetchAllProducts(
-          accessToken,
-          { includeInventory: true },
-          100,
-          retailer,
-        ),
-      100,
-      1000,
-    );
+  const products = await utils.callWithRetry(
+    () =>
+      fetchAllProducts(
+        accessToken,
+        { includeInventory: true },
+        100,
+        retailer,
+      ),
+    100,
+    1000,
+  );
 
-    const map = {};
-    for (const p of products) {
-      if (p.code && p.inventories?.length > 0) {
-        map[p.code] = p.inventories[0].cost ?? 0;
-      }
+  const costMap = {};
+  for (const product of products) {
+    if (product.code && product.inventories?.length > 0) {
+      costMap[product.code] = product.inventories[0].cost ?? 0;
     }
-
-    return map;
   }
 
-  // lấy 2 map
+  return costMap;
+}
+
+function mergeCostMaps(newMap, oldMap) {
+  const merged = { ...newMap };
+
+  // Ưu tiên giá vốn từ Kiot mới, chỉ fallback sang Kiot cũ khi SKU chưa có.
+  for (const [sku, cost] of Object.entries(oldMap)) {
+    if (!merged[sku]) merged[sku] = cost;
+  }
+
+  return Object.fromEntries(Object.entries(merged).sort());
+}
+
+export async function getAllCostMap() {
   const newMap = await fetchCostMap(
     env.KIOT.kiot_new.client_id,
     env.KIOT.kiot_new.client_secret,
@@ -46,19 +56,10 @@ export async function getAllCostMap() {
       env.KIOT.kiot_old.client_secret,
       env.KIOT.kiot_old.retailer,
     );
-  } catch (err) {
-    console.log("Không lấy được oldMap:", err.message);
+  } catch (error) {
+    console.log("Không lấy được oldMap:", utils.formatError(error));
     oldMap = {};
   }
 
-  // merge: ưu tiên new
-  const merged = { ...newMap };
-  for (const [sku, cost] of Object.entries(oldMap)) {
-    if (!merged[sku]) merged[sku] = cost;
-  }
-
-  // sort
-  const sorted = Object.fromEntries(Object.entries(merged).sort());
-
-  return { newMap, oldMap, merged: sorted };
+  return { newMap, oldMap, merged: mergeCostMaps(newMap, oldMap) };
 }

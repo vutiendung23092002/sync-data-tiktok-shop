@@ -9,7 +9,7 @@ export async function reAuthTokenTiktok(
   appSecret,
   idEnvCloud,
   appName,
-  web
+  web,
 ) {
   try {
     const params = {
@@ -21,21 +21,21 @@ export async function reAuthTokenTiktok(
 
     const res = await tiktokAPI.getTikTokAccessToken(params);
 
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("envCloud")
       .upsert(
         {
           id: idEnvCloud,
-          web: web,
+          web,
           app_name: appName,
           token_type: res?.data?.token_type || "",
           access_token: encrypt(res?.data?.access_token || ""),
           access_token_expire_in: res?.data?.access_token_expire_in || "",
           refresh_token: encrypt(res?.data?.refresh_token || ""),
           refresh_token_expire_in: res?.data?.refresh_token_expire_in || "",
-          update_at: utils.utcTimestampToVn(Math.floor(Date.now() / 1000))
+          update_at: utils.utcTimestampToVn(Math.floor(Date.now() / 1000)),
         },
-        { onConflict: "id" }
+        { onConflict: "id" },
       )
       .select()
       .eq("id", idEnvCloud)
@@ -47,8 +47,8 @@ export async function reAuthTokenTiktok(
       refresh_token: decrypt(data.refresh_token),
       refresh_token_expire_in: data.refresh_token_expire_in,
     };
-  } catch (err) {
-    console.error("💥 ReAuth thất bại:", err.message || err);
-    throw err;
+  } catch (error) {
+    console.error("ReAuth thất bại:", utils.formatError(error));
+    throw error;
   }
 }

@@ -1,6 +1,10 @@
-import { getAuthorizedShops, getOrdersList } from "../../core/tiktok-api.js";
+import { getOrdersList } from "../../core/tiktok-api.js";
 import { API_PATHS_TIKTOK } from "../../config/constants.js";
-import * as utils from "../../utils/index.js";
+import {
+  createShopPageParams,
+  createTikTokHeaders,
+  signTikTokParams,
+} from "./request-options.js";
 
 export async function getAllOrdersTiktok(
   appKey,
@@ -16,30 +20,20 @@ export async function getAllOrdersTiktok(
 
   for (const shop of shops) {
     do {
-      const timestamp = Math.floor(Date.now() / 1000);
-
-      const params = {
-        app_key: appKey,
-        timestamp,
-        page_size: 100,
-        sort_order: "DESC",
-        sort_field: "create_time",
-        shop_cipher: shop.cipher,
-      };
-
-      if (nextPageToken) params.page_token = nextPageToken;
-
-      const headers = {
-        "x-tts-access-token": accessToken,
-        "Content-Type": "application/json",
-      };
+      const params = createShopPageParams({
+        appKey,
+        shop,
+        pageSize: 100,
+        sortField: "create_time",
+        nextPageToken,
+      });
 
       const body = {
         create_time_ge: from,
         create_time_lt: to,
       };
 
-      const sign = utils.generateTikTokSignSmart({
+      signTikTokParams({
         appSecret,
         path,
         params,
@@ -47,8 +41,7 @@ export async function getAllOrdersTiktok(
         method: "POST",
       });
 
-      if (sign) params.sign = sign;
-
+      const headers = createTikTokHeaders(accessToken, true);
       const resOrders = await getOrdersList(path, params, headers, body);
 
       const ordersWithShopName = resOrders?.data?.orders.map((o) => ({

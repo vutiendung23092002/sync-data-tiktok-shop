@@ -4,7 +4,6 @@ import {
   KIOT_AUTH_URL,
   API_PATHS_KIOT,
 } from "../config/constants.js";
-import { env } from "../config/env.js";
 
 export async function getAccessToken(clientId, clientSecret) {
   const params = {

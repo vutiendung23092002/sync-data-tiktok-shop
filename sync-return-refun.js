@@ -1,52 +1,30 @@
-import { env } from "./src/config/env.js";
-import { createLarkClient } from "./src/core/larkbase-client.js";
-import { checkAndRefreshAllTokens } from "./src/services/tiktok/refresh-access-token.js";
-import { getTiktokShopInfo } from "./src/services/tiktok/get-all-shop-info.js";
-import { getAllOrdersReturn } from "./src/services/tiktok/get-all-return-orders.js";
 import { syncDataToLarkBaseFilterDate } from "./src/services/larkbase/index.js";
+import { createDefaultLarkClient } from "./src/services/larkbase/context.js";
+import { getAllOrdersReturn } from "./src/services/tiktok/get-all-return-orders.js";
+import { getTiktokShopContext } from "./src/services/tiktok/context.js";
 import * as utils from "./src/utils/index.js";
 
 async function syncReturnRefunTiktok(baseId, tableReturnRefun, from, to) {
   console.log(`Đồng bộ đơn hàng hoàn trả từ ngày ${from} đến ${to}`);
-  const access_token_tsp = await checkAndRefreshAllTokens(
-    env.TIKTOK.shop_han_korea_7561567100864644872.app_key,
-    env.TIKTOK.shop_han_korea_7561567100864644872.app_secret,
-    "envCloud", // Tên bảng lưu thông tin token trên supabase
-    2
-  );
 
-  const shops = await getTiktokShopInfo(
-    env.TIKTOK.shop_han_korea_7561567100864644872.app_key,
-    env.TIKTOK.shop_han_korea_7561567100864644872.app_secret,
-    access_token_tsp
-  );
+  const { appKey, appSecret, accessToken, shops } =
+    await getTiktokShopContext();
 
   const returnOrders = await getAllOrdersReturn(
-    env.TIKTOK.shop_han_korea_7561567100864644872.app_key,
-    env.TIKTOK.shop_han_korea_7561567100864644872.app_secret,
-    access_token_tsp,
+    appKey,
+    appSecret,
+    accessToken,
     utils.vnTimeToUtcTimestamp(from),
     utils.vnTimeToUtcTimestamp(to),
-    shops
+    shops,
   );
-
-    // utils.writeJsonFile(
-    //   "./src/data/return_raw.json",
-    //   returnOrders
-    // );
 
   const returnOrderFormated = returnOrders.map((tx) =>
-    utils.formatTikTokReturnOrder(tx)
+    utils.formatTikTokReturnOrder(tx),
   );
 
-  const larkFinanceClient = await createLarkClient(
-    env.LARK.tiktok_k_orders_items.app_id,
-    env.LARK.tiktok_k_orders_items.app_secret
-  );
-
-  const ONE_DAY = 24 * 60 * 60 * 1000; // ms
-  const timestampFrom = utils.vnTimeToUTCTimestampMiliseconds(from) - ONE_DAY;
-  const timestampTo = utils.vnTimeToUTCTimestampMiliseconds(to) + ONE_DAY;
+  const larkFinanceClient = await createDefaultLarkClient();
+  const { timestampFrom, timestampTo } = utils.getLarkDateFilterRange(from, to);
 
   await syncDataToLarkBaseFilterDate(
     larkFinanceClient,
@@ -63,16 +41,12 @@ async function syncReturnRefunTiktok(baseId, tableReturnRefun, from, to) {
     },
     "Ngày tạo",
     timestampFrom,
-    timestampTo
+    timestampTo,
   );
 }
 
 const baseId = process.env.BASE_ID_TMDT;
-
 const tableReturnRefun = process.env.TABLE_NAME;
+const { from, to } = utils.getDateRangeFromEnv();
 
-// input hoặc env đều đã có yyyy/mm/dd
-const from = process.env.FROM ? `${process.env.FROM} 00:00:00` : null;
-
-const to = process.env.TO ? `${process.env.TO} 23:59:59` : null;
 syncReturnRefunTiktok(baseId, tableReturnRefun, from, to);

@@ -4,7 +4,20 @@ import {
   TIKTOK_BASE_URL,
   API_PATHS_TIKTOK,
 } from "../config/constants.js";
-import { generateTikTokSignSmart } from "../utils/tiktok/generate-sign.js";
+
+function requestTikTokShopApi(method, path, { params, headers, body } = {}) {
+  const requestConfig = {
+    baseURL: TIKTOK_BASE_URL,
+    headers,
+    params,
+  };
+
+  if (method === "POST") {
+    return http.post(path, body, requestConfig);
+  }
+
+  return http.get(path, requestConfig);
+}
 
 /**
  * Lấy access_token TikTok Shop bằng auth_code (bước cuối OAuth).
@@ -58,13 +71,7 @@ export async function refreshTikTokAccessToken(params) {
  * @returns {Promise<Object>} Danh sách shop: id, cipher, name,...
  */
 export async function getAuthorizedShops(headers, params, path) {
-  const res = await http.get(path, {
-    baseURL: TIKTOK_BASE_URL,
-    headers,
-    params,
-  });
-
-  return res;
+  return requestTikTokShopApi("GET", path, { headers, params });
 }
 
 /**
@@ -88,13 +95,7 @@ export async function getAuthorizedShops(headers, params, path) {
  * @returns {Promise<Object>} Danh sách đơn hàng.
  */
 export async function getOrdersList(path, params, headers, body) {
-  const res = await http.post(path, body, {
-    baseURL: TIKTOK_BASE_URL,
-    headers: headers,
-    params: params,
-  });
-
-  return res;
+  return requestTikTokShopApi("POST", path, { headers, params, body });
 }
 
 /**
@@ -106,13 +107,7 @@ export async function getOrdersList(path, params, headers, body) {
  * @returns {Promise<Object>} Danh sách statement.
  */
 export async function getStatements(path, params, headers) {
-  const res = await http.get(path, {
-    baseURL: TIKTOK_BASE_URL,
-    headers: headers,
-    params: params,
-  });
-
-  return res;
+  return requestTikTokShopApi("GET", path, { headers, params });
 }
 
 /**
@@ -124,13 +119,7 @@ export async function getStatements(path, params, headers) {
  * @returns {Promise<Object>} Transaction listing.
  */
 export async function getTransactionByStatement(path, params, headers) {
-  const res = await http.get(path, {
-    baseURL: TIKTOK_BASE_URL,
-    headers: headers,
-    params: params,
-  });
-
-  return res;
+  return requestTikTokShopApi("GET", path, { headers, params });
 }
 
 /**
@@ -143,11 +132,5 @@ export async function getTransactionByStatement(path, params, headers) {
  * @returns {Promise<Object>} Transaction listing.
  */
 export async function searchReturns(path, params, headers, body) {
-  const res = await http.post(path, body, {
-    baseURL: TIKTOK_BASE_URL,
-    headers: headers,
-    params: params,
-  });
-
-  return res;
+  return requestTikTokShopApi("POST", path, { headers, params, body });
 }

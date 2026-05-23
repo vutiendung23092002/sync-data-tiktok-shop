@@ -195,6 +195,36 @@ export const ORDER_ITEM_UI_TYPE_MAP = {
 };
 
 // =============================
+// MAPPING FIELD SKUS
+// =============================
+export const SKU_FIELD_MAP = {
+  id_sku: "id_sku",
+  seller_sku: "seller_sku",
+  sku_name: "sku_name",
+  product_id: "product_id",
+  product_name: "product_name",
+  hash: "hash",
+};
+
+export const SKU_TYPE_MAP = {
+  id_sku: 1,
+  seller_sku: 1,
+  sku_name: 1,
+  product_id: 1,
+  product_name: 1,
+  hash: 1,
+};
+
+export const SKU_UI_TYPE_MAP = {
+  id_sku: "Text",
+  seller_sku: "Text",
+  sku_name: "Text",
+  product_id: "Text",
+  product_name: "Text",
+  hash: "Text",
+};
+
+// =============================
 // MAPPING FIELD TRANSACTION
 // =============================
 export const TRANSACTION_FIELD_MAP = {
