@@ -132,6 +132,10 @@ export async function searchLarkRecords(
         params: { user_id_type: "open_id", page_size: pageSize },
       },
     )) {
+      if (page?.msg && page.msg !== "success") {
+        throw createLarkApiError(page);
+      }
+
       if (page.items && page.items.length > 0) {
         records.push(...page.items);
       }
